@@ -1,0 +1,3 @@
+confidence_threshold: 0.7
+max_detections: 5
+model_path: "models/food_yolov8.pt"
