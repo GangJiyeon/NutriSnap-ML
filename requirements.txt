@@ -9,6 +9,7 @@ python-multipart>=0.0.9
 # ONNX export / inference
 onnx>=1.17.0
 onnxruntime>=1.19.0
+onnxslim>=0.1.82
 
 # Shared
 numpy>=1.26.0,<2.0.0
