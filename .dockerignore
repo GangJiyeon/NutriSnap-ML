@@ -1,0 +1,12 @@
+venv/
+data/
+runs/
+notebooks/
+tests/
+.git/
+.github/
+.pytest_cache/
+__pycache__/
+*.pyc
+docs/
+*.md
