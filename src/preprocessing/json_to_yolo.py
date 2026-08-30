@@ -2,7 +2,6 @@
 import argparse
 import json
 import logging
-import os
 import shutil
 from pathlib import Path
 
@@ -153,10 +152,10 @@ def process_split(
 
 
 def write_dataset_yaml(yaml_path: Path, output_root: Path, class_to_id: dict[str, int]) -> None:
-    rel_path = os.path.relpath(output_root, start=yaml_path.parent)
     names = {idx: name for name, idx in sorted(class_to_id.items(), key=lambda kv: kv[1])}
     payload = {
-        "path": rel_path,
+        # ultralytics는 상대경로를 yaml 위치가 아니라 자체 datasets_dir 설정 기준으로 해석하므로 절대경로 사용
+        "path": str(output_root.resolve()),
         "train": "images/train",
         "val": "images/val",
         "names": names,
