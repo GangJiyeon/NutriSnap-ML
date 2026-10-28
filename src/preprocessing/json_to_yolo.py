@@ -32,14 +32,11 @@ def class_name_from_folder(folder_name: str) -> str:
 
 
 def collect_classes(input_root: Path) -> dict[str, int]:
+    # 학습 이미지가 없는 클래스가 생기지 않도록 training 스플릿 기준으로만 클래스를 정한다
     names = set()
-    for split_dir_name in SPLIT_MAP:
-        split_root = input_root / split_dir_name
-        if not split_root.is_dir():
-            continue
-        labels_root = find_role_dir(split_root, "라벨")
-        if labels_root is None:
-            continue
+    split_root = input_root / "training"
+    labels_root = find_role_dir(split_root, "라벨") if split_root.is_dir() else None
+    if labels_root is not None:
         for class_dir in labels_root.iterdir():
             if class_dir.is_dir():
                 names.add(class_name_from_folder(class_dir.name))
@@ -109,6 +106,9 @@ def process_split(
         if not class_dir.is_dir():
             continue
         class_name = class_name_from_folder(class_dir.name)
+        if class_name not in class_to_id:
+            logger.warning("training에 없는 클래스라 skip: %s", class_name)
+            continue
         class_id = class_to_id[class_name]
         image_class_dir = images_root / class_name
         if not image_class_dir.is_dir():
