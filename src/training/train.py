@@ -30,23 +30,29 @@ def main() -> None:
     parser.add_argument("--project", default=str(REPO_ROOT / "runs" / "detect"))
     parser.add_argument("--name", default="food_yolov8")
     parser.add_argument("--output-weights", type=Path, default=REPO_ROOT / "models" / "food_yolov8.pt")
+    parser.add_argument("--resume", action="store_true", help="project/name의 last.pt에서 중단된 학습을 이어서 진행")
     args = parser.parse_args()
     device = args.device or resolve_device()
     # ultralytics는 상대 project 경로를 자체 runs_dir 설정 기준으로 또 붙여서 해석하므로 절대경로로 고정
     args.project = str(Path(args.project).resolve())
 
-    model = YOLO(args.weights)
-    model.train(
-        data=str(args.data),
-        epochs=args.epochs,
-        imgsz=args.imgsz,
-        batch=args.batch,
-        device=device,
-        patience=args.patience,
-        fraction=args.fraction,
-        project=args.project,
-        name=args.name,
-    )
+    if args.resume:
+        # 에폭/옵티마이저 상태와 학습 설정은 체크포인트에 저장된 값을 그대로 사용한다
+        last_weights = Path(args.project) / args.name / "weights" / "last.pt"
+        YOLO(str(last_weights)).train(resume=True)
+    else:
+        model = YOLO(args.weights)
+        model.train(
+            data=str(args.data),
+            epochs=args.epochs,
+            imgsz=args.imgsz,
+            batch=args.batch,
+            device=device,
+            patience=args.patience,
+            fraction=args.fraction,
+            project=args.project,
+            name=args.name,
+        )
 
     best_weights = Path(args.project) / args.name / "weights" / "best.pt"
     args.output_weights.parent.mkdir(parents=True, exist_ok=True)
