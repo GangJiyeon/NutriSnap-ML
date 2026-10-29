@@ -1,198 +1,223 @@
 # NutriSnap ML
 
-Machine learning component of **NutriSnap**, a team project focused on food image analysis.
+Food detection model and inference API for **NutriSnap**, a nutrition-tracking app. Given a meal photo, it returns the detected foods with confidence scores and bounding boxes; the backend then looks up nutrition facts for each food.
 
-## Overview
+This repository is the ML component of a team project (the full app lives in a private repository).
 
-This repository contains the machine learning work developed for NutriSnap, including model fine-tuning and food image inference.
+## Highlights
 
-## My Contributions
+- **Fine-tuned YOLOv8n on 93k AIHub food images (38 classes)**: mAP50 **0.970**, mAP50-95 **0.887** on 11.7k held-out validation images.
+- **Found and explained a real-world failure mode**: the model misses foods in multi-dish table photos. Traced it to the training data, where every one of the 93k images contains a single food type.
+- **PyTorch-free serving**: reimplemented YOLOv8 pre/post-processing on ONNX Runtime + NumPy/OpenCV. Docker image went from **10.2 GB to 732 MB**, memory from **478 MB to 133 MB**, and predictions are identical to Ultralytics on 200 validation images.
 
-- Developed the ML component of the team project.
-- Fine-tuned a food image analysis model.
-- Contributed to selected backend features using Spring Boot.
-
-*Note: This repository contains only the ML component. The full team project is maintained in a private repository.*
-
-## Tech Stack
-
-- Python
-- Deep Learning
-- Computer Vision
-- Yolov8
-
-## Project Status
-
-Work in progress. Documentation, evaluation results, and further improvements will be added.
-
-## Development Timeline
-
-- **July 10 – August 30, 2026:** Initial development and model fine-tuning.
-- **October 26 – October 31, 2026 (Planned):** Further model improvements, evaluation, and documentation.
-
-## Project Status
-
-Initial development completed. Further improvements are planned for late October 2026.
-
-## Future Work
-
-- Improve the training dataset.
-- Evaluate model performance.
-- Document the fine-tuning process and results.
-
----
-
-# Technical Details
-
-음식 사진 한 장으로 음식 종류를 탐지(detection)하고, 각 음식에 대한 신뢰도(confidence)를 반환하는 딥러닝 모델 및 추론 API. 
-음식 영양소 트래킹 앱의 이미지 처리(딥러닝) 파트를 담당하는 레포입니다.
-
-## 개요
-
-- **모델**: YOLOv8 (Ultralytics), COCO pretrained 가중치를 AIHub 음식 이미지 데이터로 파인튜닝
-- **역할**: 사진 → `{음식명, 신뢰도, bbox}` 리스트 반환까지가 이 레포의 책임 범위. 양(포션) 추정, 영양소 계산, DB 저장은 백엔드에서 처리
-- **배포**: FastAPI 기반 추론 서버, ONNX Runtime으로 최적화하여 서버리스 GPU(Modal 등)에 배포
-
-## 데이터셋
-
-[AIHub 음식 이미지 데이터](https://www.aihub.or.kr/aihubdata/data/view.do?currMenu=115&topMenu=100&dataSetSn=242)
-
-- 500여종 음식 카테고리, 카테고리당 약 60,000장 (전체 약 300만 장)
-- 이미지 + 바운딩박스 JSON 어노테이션 페어
-- 카테고리별 100g/1인분 기준 영양성분 메타데이터 포함
-
-**다운로드 방법**
-1. AIHub 회원가입 후 위 링크에서 데이터 다운로드 신청 (승인 필요, 내국인만 가능)
-2. 신청 시 안심존 대상 여부 먼저 확인 (일반 승인 대상인 경우가 대부분이나 헬스케어 카테고리 공통 안내가 붙어있어 확인 권장)
-3. 분할 압축 파일(zip.part*) 다운로드 후 병합
-
-```bash
-cat food_data.zip.part* > food_data.zip
-unzip food_data.zip -d data/raw/
-```
-
-**서브셋 구성**: 500클래스 전체 대신 자주 먹는 음식 위주 50~100개 클래스, 클래스당 300~500장으로 구성하여 1차 파인튜닝 진행
-
-## 프로젝트 구조
+## How it works
 
 ```
-food-recognition-model/
-├── data/
-│   ├── raw/                  # AIHub 원본 다운로드 (git 추적 제외)
-│   ├── processed/            # YOLO 포맷 변환 후 (images/, labels/)
-│   └── food_dataset.yaml     # 클래스 목록 + 경로 설정
-├── src/
-│   ├── preprocessing/
-│   │   └── json_to_yolo.py   # AIHub JSON → YOLO txt 변환
-│   ├── training/
-│   │   └── train.py          # YOLOv8 파인튜닝 스크립트
-│   ├── inference/
-│   │   ├── predict.py        # 모델 로드 + 추론 로직
-│   │   └── export_onnx.py    # .pt → ONNX 변환
-│   └── api/
-│       └── main.py           # FastAPI 앱 (/predict, /health)
-├── models/                   # 학습된 가중치 (.pt, .onnx, git 추적 제외)
-├── notebooks/                # 실험/EDA
-├── tests/
-│   ├── test_api.py
-│   └── test_postprocess.py
-├── config.yaml                # threshold, 최대 인식 개수 등 설정값
-├── Dockerfile
-├── requirements.txt           # 추론 서버용 (ONNX Runtime, PyTorch 없음)
-├── requirements-train.txt     # 학습/ONNX 변환용 (ultralytics, PyTorch)
-├── .github/workflows/ci.yml
-└── README.md
+photo ──► FastAPI /predict ──► letterbox (OpenCV) ──► YOLOv8n (ONNX Runtime) ──► NMS + box rescale ──► [{food_name, confidence, bbox}]
+                                                                                                              │
+                                                                                         NutriSnap backend ◄──┘ (nutrition lookup, portion, storage)
 ```
 
-## 로컬 실행 방법
+## Dataset and preprocessing
 
-### 1. 환경 설정
-```bash
-git clone <repo-url>
-cd food-recognition-model
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
+**Source**: [AIHub food image dataset](https://www.aihub.or.kr/aihubdata/data/view.do?currMenu=115&topMenu=100&dataSetSn=242), first bundle (`음식001`). Images come with one bounding-box JSON file each. Download requires AIHub approval and is limited to Korean residents.
 
-# 추론 서버만 실행할 때
-pip install -r requirements.txt
+| Split | Images | Boxes | Classes |
+|---|---|---|---|
+| Train | 93,573 | 120,405 | 38 |
+| Validation | 11,679 | 14,966 | 38 |
 
-# 학습/ONNX 변환까지 할 때 (GPU 학습 시 CUDA용 torch를 먼저 설치)
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
-pip install -r requirements-train.txt
-```
+`src/preprocessing/json_to_yolo.py` converts the AIHub JSON labels into YOLO format. Several issues in the raw data showed up during conversion:
 
-### 2. 데이터 전처리
-```bash
-python src/preprocessing/json_to_yolo.py --input data/raw/ --output data/processed/
-```
+- **Validation labels cover 87 classes, but training covers only 38.** Keeping all of them would create 49 classes with zero training images and skew evaluation. The class list is therefore built from the training split only, and validation-only classes are skipped with a warning.
+- **A typo in a label folder name**: `닭파프라카볶음` in the labels vs. `닭파프리카볶음` in the images. Because of the mismatch, the whole class silently dropped out until the label folder was renamed to match.
+- **Minor noise**: 33 validation labels point to image files that do not exist, and 2 boxes fall slightly outside the image. These are skipped.
 
-### 3. 학습 (파인튜닝)
-```bash
-python src/training/train.py --data data/food_dataset.yaml --epochs 100 --imgsz 640
-```
-학습된 가중치는 `models/food_yolov8.pt`에 저장됩니다.
+## Training
 
-### 4. ONNX 변환 (배포용 최적화)
-```bash
-python src/inference/export_onnx.py --weights models/food_yolov8.pt
-```
-추론 서버는 `config.yaml`의 `model_path`(`models/food_yolov8.onnx`)를 ONNX Runtime으로 직접 실행하므로 PyTorch/ultralytics가 필요 없습니다.
+| Setting | Value |
+|---|---|
+| Base model | YOLOv8n (COCO pretrained), 3.1M parameters |
+| Image size / epochs | 640 / 100 (early-stopping patience 20) |
+| Batch size | 27 (auto-selected for 8 GB VRAM) |
+| Hardware / time | RTX 3050 8 GB, ~22 hours |
 
-### 5. 추론 서버 실행
-```bash
-uvicorn src.api.main:app --reload --port 8000
-```
+## Results
 
-## API 사용 예시
+Validation set (11,679 images):
+
+| Precision | Recall | mAP50 | mAP50-95 |
+|---|---|---|---|
+| 0.945 | 0.951 | **0.970** | **0.887** |
+
+Out of 38 classes, 22 reach mAP50 ≥ 0.99 and 32 reach ≥ 0.95. The weakest classes:
+
+| Class | Val images | mAP50 | mAP50-95 | Note |
+|---|---|---|---|---|
+| 돼지감자 (Jerusalem artichoke) | 29 | 0.787 | 0.635 | very few validation images, so the score is noisy |
+| 모짜렐라치즈 (mozzarella) | 34 | 0.790 | 0.581 | recall 0.69; often appears as small pieces on top of other dishes |
+| 모듬초밥 (assorted sushi) | 92 | 0.863 | 0.748 | |
+
+Inference on the trained model (RTX 3050) takes about 2 ms per image.
+
+## Limitations: multi-dish photos
+
+The validation score is measured on images from the same AIHub distribution as the training data. Testing on real-world photos showed a clear gap:
+
+- On a restaurant photo with six or seven dishes on the table, the model found nothing. The steak on the table scored **0.01** confidence.
+- Cropping only the steak plate and running the model again gave **0.80**, so the model does recognize steak.
+
+Analyzing the training labels explains the gap:
+
+| Training label statistic | Value |
+|---|---|
+| Food types per image | **1 in 100% of images** |
+| Boxes per image | 1 box: 81%, 2: 9%, 3: 10% (same food repeated, e.g. several macarons) |
+| Median box area | 27% of the image |
+
+The model has never seen several different foods in one photo, and the foods it has seen are usually large and centered. For now, the app should ask users to photograph one dish at a time. Possible fixes are listed in the [Roadmap](#roadmap).
+
+## Serving with ONNX Runtime
+
+The original server loaded the `.pt` model through Ultralytics, which pulls in PyTorch, including CUDA libraries even on CPU-only servers. The server now runs the exported ONNX model directly:
+
+- `src/inference/predict.py` reimplements letterbox resizing, class-wise NMS, and rescaling of boxes back to the original image with NumPy/OpenCV. Class names are read from the ONNX model metadata.
+- `requirements.txt` (server) and `requirements-train.txt` (training/export) are split, so the Docker image installs only the server dependencies.
+
+| | PyTorch + Ultralytics (before) | **ONNX Runtime (after)** |
+|---|---|---|
+| Docker image size | 10.2 GB | **732 MB** |
+| Image build time | 8 min 6 s | **43 s** |
+| Container memory after first request | 478 MB | **133 MB** |
+| First request latency (single run) | 944 ms | **181 ms** |
+
+**Parity check**: on 200 validation images, the new pipeline and Ultralytics (running the same ONNX model) return the same number of boxes on every image and the same class for all 266 boxes, with 0.0 confidence difference and a mean box IoU of 0.999.
+
+One lesson from this step: the first version resized images with PIL instead of OpenCV, and confidence scores drifted by up to 0.25. Matching the training-time preprocessing (OpenCV `INTER_LINEAR`) made the outputs identical.
+
+## API
 
 ### `POST /predict`
 
-**요청**
 ```bash
-curl -X POST "http://localhost:8000/predict" \
-  -F "image=@sample.jpg"
+curl -X POST "http://localhost:8000/predict" -F "image=@sample.jpg"
 ```
 
-**응답**
 ```json
 {
   "detections": [
-    {"food_name": "흰쌀밥", "confidence": 0.96, "bbox": [12, 34, 210, 300]},
-    {"food_name": "제육볶음", "confidence": 0.91, "bbox": [220, 40, 480, 320]},
-    {"food_name": "계란찜", "confidence": 0.74, "bbox": [10, 320, 180, 480], "needs_review": true}
+    {"food_name": "마카롱", "confidence": 0.94, "bbox": [140, 2, 526, 774]},
+    {"food_name": "마카롱", "confidence": 0.91, "bbox": [584, 532, 964, 777]}
   ]
 }
 ```
 
-### `GET /health`
-서버 상태 확인용 헬스체크 엔드포인트
+- `bbox` is `[x1, y1, x2, y2]` in original image pixels.
+- Detections below `confidence_threshold` are returned with `"needs_review": true`, so the app can ask the user to confirm them.
+- Non-image uploads return `400`.
 
-## 설정값 (`config.yaml`)
+### `GET /health`
+
+Returns `{"status": "ok"}`.
+
+### Configuration (`config.yaml`)
 
 ```yaml
-confidence_threshold: 0.7   # 이 값 미만은 needs_review: true 태그
-max_detections: 5           # 한 이미지에서 최대로 인식할 음식 개수
+confidence_threshold: 0.7   # below this, detections are flagged needs_review
+max_detections: 5           # maximum foods returned per image
 model_path: "models/food_yolov8.onnx"
 ```
 
-## 역할 경계 (중요)
+## Getting started
 
-이 레포는 아래 항목을 **다루지 않습니다**. 관련 로직은 백엔드/DB에서 처리됩니다.
+### Run the inference server (Docker)
 
-- 음식 양(포션) 추정 — 현재는 사용자가 앱에서 기본 1.0인분 기준 수동 조절
-- 영양소(칼로리 등) 계산 — 음식명 확정 후 Supabase 영양성분 테이블에서 조회
-- 음식명 검색/자동완성 — 별도 텍스트 검색 로직
+Place the trained `models/food_yolov8.onnx` first (model weights are not tracked in git).
 
-> **음식 부피(양) 추정**은 depth estimation 등을 활용한 별도 연구 트랙으로 분리되어 진행 예정이며, 이 레포의 스코프에 포함되지 않습니다.
+```bash
+docker build -t nutrisnap-ml .
+docker run -p 8000:8000 nutrisnap-ml
+```
 
-## 배포
+### Local setup
 
-- **추론 서버**: FastAPI + ONNX Runtime, 서버리스 GPU 환경(Modal 등) 우선 고려 — 초기 트래픽이 적어 비용 효율적이며 콜드스타트 시간도 ONNX 덕분에 단축됨
-- **트래픽 증가 시**: 동일 코드로 자체 서버(EC2/GCP VM)로 전환 가능
-- 이미지 저장/DB/인증은 Supabase(Storage, Postgres, Auth)에서 처리, 이 레포는 추론 API만 제공
+```bash
+python -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
 
-## 향후 과제
+# inference server only
+pip install -r requirements.txt
 
-- [ ] 서브셋 확장 (사용자 로그 기반 미인식 클래스 추가)
-- [ ] bbox 면적 기반 양 추정 근사치 (2차 개선)
-- [ ] (별도 트랙) Depth estimation 기반 정밀 부피 추정
+# training + ONNX export (install the CUDA build of torch first for GPU training)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+pip install -r requirements-train.txt
+```
+
+### Train and export
+
+```bash
+# 1. Convert AIHub labels to YOLO format.
+#    Expects data/raw/{training,validation}/ with one folder whose name contains "라벨" (labels) and one containing "원천" (images).
+#    Use --copy on Windows (symlinks need admin rights).
+python src/preprocessing/json_to_yolo.py --input data/raw/ --output data/processed/ --copy
+
+# 2. Fine-tune (best weights are copied to models/food_yolov8.pt)
+python src/training/train.py --epochs 100
+python src/training/train.py --resume        # continue an interrupted run
+
+# 3. Export to ONNX for serving
+python src/inference/export_onnx.py
+
+# 4. Run the server and tests
+uvicorn src.api.main:app --port 8000
+pytest
+```
+
+AIHub zip files store Korean file names in CP949. Some unzip tools garble them, so extract with a tool that supports CP949, for example Python's `zipfile.ZipFile(path, metadata_encoding="cp949")`.
+
+## Project structure
+
+```
+├── src/
+│   ├── preprocessing/json_to_yolo.py   # AIHub JSON -> YOLO labels
+│   ├── training/train.py               # YOLOv8 fine-tuning (+ --resume)
+│   ├── inference/
+│   │   ├── predict.py                  # ONNX Runtime inference, pre/post-processing
+│   │   └── export_onnx.py              # .pt -> .onnx
+│   └── api/main.py                     # FastAPI app (/predict, /health)
+├── tests/
+│   ├── test_api.py                     # API schema and error handling
+│   └── test_postprocess.py             # letterbox, NMS, box rescaling
+├── config.yaml
+├── Dockerfile
+├── requirements.txt                    # server (ONNX Runtime, no PyTorch)
+└── requirements-train.txt              # training / export (Ultralytics, PyTorch)
+```
+
+`data/`, `models/`, and `runs/` are not tracked in git.
+
+## Scope
+
+This service only answers "which foods are in this photo, and where". The NutriSnap backend handles the rest:
+
+- **Nutrition lookup**: after the food name is confirmed, it is looked up in the nutrition table (Supabase).
+- **Portion size**: currently set manually in the app (default 1 serving). Volume estimation with depth models is a separate research track.
+- **Storage and auth**: Supabase.
+
+## Roadmap
+
+- [ ] Real-world test set: 30 to 50 phone and multi-dish photos with labels, to measure the gap shown above
+- [ ] Multi-dish robustness: synthetic multi-food composites and/or a multi-dish dataset, evaluated on the real-world test set
+- [ ] More classes from additional AIHub bundles (`음식002` and later)
+- [ ] CI that runs `pytest` on every push
+- [ ] Deploy the ONNX server (serverless option such as Modal, or a small VM)
+
+## My contributions
+
+- Built the ML component end to end: data preprocessing, fine-tuning, evaluation and error analysis, ONNX serving, the FastAPI server, tests, and Docker.
+- Contributed to selected backend features of the main app using Spring Boot.
+
+## Timeline
+
+- **Jul 10 – Aug 30, 2026**: inference API skeleton, preprocessing, training and export scripts, API tests and Docker
+- **Oct 26 – Oct 31, 2026**: full training run on 93k images, error analysis, ONNX Runtime serving, documentation
