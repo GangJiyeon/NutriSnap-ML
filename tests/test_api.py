@@ -8,35 +8,16 @@ from PIL import Image
 import src.inference.predict as predict_module
 from src.api.main import app
 from src.config import get_config
-
-
-class _Tensor:
-    def __init__(self, data: list[float]):
-        self._data = data
-
-    def tolist(self) -> list[float]:
-        return self._data
-
-
-class _FakeBox:
-    def __init__(self, cls_id: int, conf: float, xyxy: list[float]):
-        self.cls = [cls_id]
-        self.conf = [conf]
-        self.xyxy = [_Tensor(xyxy)]
-
-
-class _FakeResult:
-    def __init__(self, boxes: list[_FakeBox], names: dict[int, str]):
-        self.boxes = boxes
-        self.names = names
+from src.inference.predict import Detection
 
 
 class _FakeModel:
-    def __init__(self, boxes: list[_FakeBox], names: dict[int, str]):
-        self._result = _FakeResult(boxes, names)
+    def __init__(self, boxes: list[Detection], names: dict[int, str]):
+        self._boxes = boxes
+        self.names = names
 
-    def predict(self, image, verbose=False):
-        return [self._result]
+    def detect(self, image):
+        return self._boxes
 
 
 def _sample_image_bytes() -> bytes:
@@ -59,8 +40,8 @@ def test_health(client):
 def test_predict_returns_expected_schema(monkeypatch, client):
     names = {0: "밥", 1: "김치"}
     boxes = [
-        _FakeBox(0, 0.95, [10.0, 20.0, 100.0, 150.0]),
-        _FakeBox(1, 0.30, [5.0, 5.0, 50.0, 50.0]),
+        Detection(0, 0.95, [10.0, 20.0, 100.0, 150.0]),
+        Detection(1, 0.30, [5.0, 5.0, 50.0, 50.0]),
     ]
     monkeypatch.setattr(predict_module, "get_model", lambda: _FakeModel(boxes, names))
 
@@ -78,8 +59,8 @@ def test_predict_flags_low_confidence_as_needs_review(monkeypatch, client):
     threshold = get_config()["confidence_threshold"]
     names = {0: "밥", 1: "김치"}
     boxes = [
-        _FakeBox(0, threshold + 0.1, [10.0, 20.0, 100.0, 150.0]),
-        _FakeBox(1, threshold - 0.1, [5.0, 5.0, 50.0, 50.0]),
+        Detection(0, threshold + 0.1, [10.0, 20.0, 100.0, 150.0]),
+        Detection(1, threshold - 0.1, [5.0, 5.0, 50.0, 50.0]),
     ]
     monkeypatch.setattr(predict_module, "get_model", lambda: _FakeModel(boxes, names))
 

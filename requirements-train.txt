@@ -1,0 +1,6 @@
+# Training (YOLOv8 fine-tuning) + ONNX export
+# GPU 학습 시 torch는 CUDA 빌드를 먼저 설치: pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+-r requirements.txt
+ultralytics>=8.3.0,<9.0.0
+onnx>=1.17.0
+onnxslim>=0.1.82

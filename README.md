@@ -94,10 +94,12 @@ food-recognition-model/
 ├── models/                   # 학습된 가중치 (.pt, .onnx, git 추적 제외)
 ├── notebooks/                # 실험/EDA
 ├── tests/
-│   └── test_api.py
+│   ├── test_api.py
+│   └── test_postprocess.py
 ├── config.yaml                # threshold, 최대 인식 개수 등 설정값
 ├── Dockerfile
-├── requirements.txt
+├── requirements.txt           # 추론 서버용 (ONNX Runtime, PyTorch 없음)
+├── requirements-train.txt     # 학습/ONNX 변환용 (ultralytics, PyTorch)
 ├── .github/workflows/ci.yml
 └── README.md
 ```
@@ -110,7 +112,13 @@ git clone <repo-url>
 cd food-recognition-model
 python -m venv venv
 source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# 추론 서버만 실행할 때
 pip install -r requirements.txt
+
+# 학습/ONNX 변환까지 할 때 (GPU 학습 시 CUDA용 torch를 먼저 설치)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+pip install -r requirements-train.txt
 ```
 
 ### 2. 데이터 전처리
@@ -128,6 +136,7 @@ python src/training/train.py --data data/food_dataset.yaml --epochs 100 --imgsz 
 ```bash
 python src/inference/export_onnx.py --weights models/food_yolov8.pt
 ```
+추론 서버는 `config.yaml`의 `model_path`(`models/food_yolov8.onnx`)를 ONNX Runtime으로 직접 실행하므로 PyTorch/ultralytics가 필요 없습니다.
 
 ### 5. 추론 서버 실행
 ```bash

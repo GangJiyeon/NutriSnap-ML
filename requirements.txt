@@ -1,17 +1,10 @@
-# Training (YOLOv8 fine-tuning)
-ultralytics>=8.3.0,<9.0.0
-
-# Inference server
+# Inference server (ONNX Runtime, no PyTorch)
+# 학습/ONNX 변환까지 하려면 requirements-train.txt를 설치
 fastapi>=0.115.0,<1.0.0
 uvicorn[standard]>=0.32.0,<1.0.0
 python-multipart>=0.0.9
-
-# ONNX export / inference
-onnx>=1.17.0
 onnxruntime>=1.19.0
-onnxslim>=0.1.82
-
-# Shared
+opencv-python-headless>=4.8.0
 numpy>=1.26.0,<2.0.0
 pillow>=10.0.0
 pyyaml>=6.0
