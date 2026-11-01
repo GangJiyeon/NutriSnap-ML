@@ -96,6 +96,8 @@ def test_demo_page_is_served(client):
 
 def test_samples_lists_images_with_labels(monkeypatch, tmp_path, client):
     (tmp_path / "green_olives.jpg").write_bytes(b"")
+    (tmp_path / "._green_olives.jpg").write_bytes(b"macOS metadata")
+    (tmp_path / "folder.jpg").mkdir()
     (tmp_path / "notes.txt").write_text("not an image")
     monkeypatch.setattr("src.api.main.SAMPLES_DIR", tmp_path)
 

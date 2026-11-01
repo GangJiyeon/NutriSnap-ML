@@ -4,6 +4,10 @@ Food detection model and inference API for **NutriSnap**, a nutrition-tracking a
 
 This repository is the ML component of a team project (the full app lives in a private repository).
 
+**[Live demo](https://nutrisnap.stewdiore.com)** · **[API docs](https://nutrisnap.stewdiore.com/docs)**
+
+Upload a food photo or try one of the three AI-generated samples. The demo shows detected foods, confidence scores, and bounding boxes. It works best with a close-up photo of one of the 38 supported foods; photos are processed in memory and are not stored by the application.
+
 ## Highlights
 
 - **Fine-tuned YOLOv8n on 93k AIHub food images (38 classes)**: mAP50 **0.970**, mAP50-95 **0.887** on 11.7k held-out validation images.
@@ -60,7 +64,7 @@ Out of 38 classes, 22 reach mAP50 ≥ 0.99 and 32 reach ≥ 0.95. The weakest cl
 
 Inference on the trained model (RTX 3050) takes about 2 ms per image.
 
-## Limitations: multi-dish photos
+## Limitations: wide shots of multiple plates
 
 The validation score is measured on images from the same AIHub distribution as the training data. Testing on real-world photos showed a clear gap:
 
@@ -75,7 +79,7 @@ Analyzing the training labels explains the gap:
 | Boxes per image | 1 box: 81%, 2: 9%, 3: 10% (same food repeated, e.g. several macarons) |
 | Median box area | 27% of the image |
 
-The model has never seen several different foods in one photo, and the foods it has seen are usually large and centered. For now, the app should ask users to photograph one dish at a time. Possible fixes are listed in the [Roadmap](#roadmap).
+The training images contain only one food type each, usually large and centered. The observed failure concerns wide table photos with several plates, where each food occupies a small part of the image. This does not mean that different foods on a single plate cannot be detected together, although performance on mixed plates has not been systematically evaluated. For the demo, close-up photos of a single plate are recommended.
 
 ## Serving with ONNX Runtime
 
@@ -138,6 +142,16 @@ Place the trained `models/food_yolov8.onnx` first (model weights are not tracked
 docker build -t nutrisnap-ml .
 docker run -p 8000:8000 nutrisnap-ml
 ```
+
+### Live deployment
+
+The demo runs on a **Vultr VM in Seoul** (Ubuntu 24.04, 1 vCPU, 2 GB RAM), using Docker and CPU-only ONNX Runtime inference. Cloudflare Tunnel connects the public HTTPS hostname to the API container over a shared Docker network; the API port is not published on the host.
+
+```text
+https://nutrisnap.stewdiore.com → Cloudflare Tunnel → FastAPI container :8000 → ONNX model
+```
+
+The container restarts automatically unless explicitly stopped, and has a 512 MiB memory limit, a 0.75 CPU limit, and a `/health` check. After a sample inference, container memory usage was approximately **128 MiB**. The health endpoint, demo page, model class list, and inference on all three sample photos were verified after deployment.
 
 ### Local setup
 
@@ -204,14 +218,6 @@ This service only answers "which foods are in this photo, and where". The NutriS
 - **Portion size**: currently set manually in the app (default 1 serving). Volume estimation with depth models is a separate research track.
 - **Storage and auth**: Supabase.
 
-## Roadmap
-
-- [ ] Real-world test set: 30 to 50 phone and multi-dish photos with labels, to measure the gap shown above
-- [ ] Multi-dish robustness: synthetic multi-food composites and/or a multi-dish dataset, evaluated on the real-world test set
-- [ ] More classes from additional AIHub bundles (`음식002` and later)
-- [ ] CI that runs `pytest` on every push
-- [ ] Deploy the ONNX server (serverless option such as Modal, or a small VM)
-
 ## Data source and attribution
 
 This project uses the **"건강관리를 위한 음식 이미지" (Food Images for Health Care)** dataset from [AI-Hub](https://www.aihub.or.kr), built with support from the National Information Society Agency (NIA, 한국지능정보사회진흥원) of Korea. The dataset itself is not redistributed in this repository or in the demo.
@@ -229,3 +235,4 @@ The sample photos in the demo are AI-generated and are not part of the AI-Hub da
 
 - **Jul 10 – Aug 30, 2026**: inference API skeleton, preprocessing, training and export scripts, API tests and Docker
 - **Oct 26 – Oct 31, 2026**: full training run on 93k images, error analysis, ONNX Runtime serving, documentation
+- **Nov 1, 2026**: deployed the public demo on Vultr with Docker and Cloudflare Tunnel; verified sample inference through the public domain

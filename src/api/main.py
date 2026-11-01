@@ -46,7 +46,10 @@ def classes():
 
 @app.get("/samples", include_in_schema=False)
 def samples():
-    files = sorted(p for p in SAMPLES_DIR.glob("*") if p.suffix.lower() in SAMPLE_SUFFIXES) if SAMPLES_DIR.is_dir() else []
+    files = sorted(
+        p for p in SAMPLES_DIR.glob("*")
+        if p.is_file() and not p.name.startswith(".") and p.suffix.lower() in SAMPLE_SUFFIXES
+    ) if SAMPLES_DIR.is_dir() else []
     return {
         "samples": [
             {"url": f"/static/samples/{p.name}", "label": p.stem.replace("_", " ").replace("-", " ").title()}
