@@ -212,6 +212,14 @@ This service only answers "which foods are in this photo, and where". The NutriS
 - [ ] CI that runs `pytest` on every push
 - [ ] Deploy the ONNX server (serverless option such as Modal, or a small VM)
 
+## Data source and attribution
+
+This project uses the **"건강관리를 위한 음식 이미지" (Food Images for Health Care)** dataset from [AI-Hub](https://www.aihub.or.kr), built with support from the National Information Society Agency (NIA, 한국지능정보사회진흥원) of Korea. The dataset itself is not redistributed in this repository or in the demo.
+
+> 이 결과물은 과학기술정보통신부의 재원으로 한국지능정보사회진흥원의 지원을 받아 구축된 "건강관리를 위한 음식 이미지" 데이터를 활용하였습니다. (AI-Hub, www.aihub.or.kr)
+
+The sample photos in the demo are AI-generated and are not part of the AI-Hub dataset.
+
 ## My contributions
 
 - Built the ML component end to end: data preprocessing, fine-tuning, evaluation and error analysis, ONNX serving, the FastAPI server, tests, and Docker.
