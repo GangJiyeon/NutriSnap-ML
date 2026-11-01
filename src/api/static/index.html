@@ -114,11 +114,13 @@
   canvas { display: block; width: 100%; height: auto; }
   .scan { position: absolute; inset: 0; display: none; pointer-events: none; }
   .scan.show { display: block; }
-  .scan::before { content: ""; position: absolute; inset: 0; background: rgba(20, 12, 6, .28); }
+  .scan::before { content: ""; position: absolute; inset: 0; background: rgba(29, 29, 31, .18); }
   .scan::after {
     content: ""; position: absolute; left: 0; right: 0; height: 30%;
+    border-bottom: 2px solid var(--accent);
+    filter: drop-shadow(0 2px 6px rgba(224, 85, 59, .6));
     background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--accent) 45%, transparent) 85%, var(--accent));
-    animation: sweep 1.3s cubic-bezier(.5, 0, .5, 1) infinite;
+    animation: sweep 1s linear infinite;
   }
   @keyframes sweep { from { top: -30%; } to { top: 100%; } }
   @media (prefers-reduced-motion: reduce) { .scan::after { animation: none; top: 35%; } }
@@ -535,6 +537,10 @@ async function handle(file) {
     const body = await res.json();
     if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
     const ms = Math.round(performance.now() - started);
+    // 빠른 로컬 추론에서도 분석 중임을 알아볼 수 있도록 스캔 한 번을 보여준다.
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, 1000 - ms)));
+    }
     $("meta").textContent = `${w} × ${h}px photo`;
     draw(body.detections);
     renderResults(body.detections, ms);
