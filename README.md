@@ -6,13 +6,20 @@ This repository is the ML component of a team project (the full app lives in a p
 
 **[Live demo](https://nutrisnap.stewdiore.com)** · **[API docs](https://nutrisnap.stewdiore.com/docs)**
 
+[![NutriSnap demo detecting beer, marshmallows, and steak with bounding boxes and confidence scores](docs/images/demo.gif)](https://nutrisnap.stewdiore.com)
+
 Upload a food photo or try one of the three AI-generated samples. The demo shows detected foods, confidence scores, and bounding boxes. It works best with a close-up photo of one of the 38 supported foods; photos are processed in memory and are not stored by the application.
 
 ## Highlights
 
-- **Fine-tuned YOLOv8n on 93k AIHub food images (38 classes)**: mAP50 **0.970**, mAP50-95 **0.887** on 11.7k held-out validation images.
+- **Fine-tuned YOLOv8n on 93k AI-Hub food images (38 classes)**: mAP50 **0.970**, mAP50-95 **0.887** on 11.7k held-out validation images.
 - **Found and explained a real-world failure mode**: the model misses foods in multi-dish table photos. Traced it to the training data, where every one of the 93k images contains a single food type.
 - **PyTorch-free serving**: reimplemented YOLOv8 pre/post-processing on ONNX Runtime + NumPy/OpenCV. Docker image went from **10.2 GB to 732 MB**, memory from **478 MB to 133 MB**, and predictions are identical to Ultralytics on 200 validation images.
+
+## My contributions
+
+- Built the ML component end to end: data preprocessing, fine-tuning, evaluation and error analysis, ONNX serving, the FastAPI server, tests, and Docker.
+- Contributed to selected backend features of the main app using Spring Boot.
 
 ## How it works
 
@@ -24,14 +31,14 @@ photo ──► FastAPI /predict ──► letterbox (OpenCV) ──► YOLOv8n 
 
 ## Dataset and preprocessing
 
-**Source**: [AIHub food image dataset](https://www.aihub.or.kr/aihubdata/data/view.do?currMenu=115&topMenu=100&dataSetSn=242), first bundle (`음식001`). Images come with one bounding-box JSON file each. Download requires AIHub approval and is limited to Korean residents.
+**Source**: [AI-Hub food image dataset](https://www.aihub.or.kr/aihubdata/data/view.do?currMenu=115&topMenu=100&dataSetSn=242), first bundle (`음식001`). Images come with one bounding-box JSON file each. Download requires AI-Hub approval and is limited to Korean residents.
 
 | Split | Images | Boxes | Classes |
 |---|---|---|---|
 | Train | 93,573 | 120,405 | 38 |
 | Validation | 11,679 | 14,966 | 38 |
 
-`src/preprocessing/json_to_yolo.py` converts the AIHub JSON labels into YOLO format. Several issues in the raw data showed up during conversion:
+`src/preprocessing/json_to_yolo.py` converts the AI-Hub JSON labels into YOLO format. Several issues in the raw data showed up during conversion:
 
 - **Validation labels cover 87 classes, but training covers only 38.** Keeping all of them would create 49 classes with zero training images and skew evaluation. The class list is therefore built from the training split only, and validation-only classes are skipped with a warning.
 - **A typo in a label folder name**: `닭파프라카볶음` in the labels vs. `닭파프리카볶음` in the images. Because of the mismatch, the whole class silently dropped out until the label folder was renamed to match.
@@ -66,7 +73,7 @@ Inference on the trained model (RTX 3050) takes about 2 ms per image.
 
 ## Limitations: wide shots of multiple plates
 
-The validation score is measured on images from the same AIHub distribution as the training data. Testing on real-world photos showed a clear gap:
+The validation score is measured on images from the same AI-Hub distribution as the training data. Testing on real-world photos showed a clear gap:
 
 - On a restaurant photo with six or seven dishes on the table, the model found nothing. The steak on the table scored **0.01** confidence.
 - Cropping only the steak plate and running the model again gave **0.80**, so the model does recognize steak.
@@ -80,6 +87,8 @@ Analyzing the training labels explains the gap:
 | Median box area | 27% of the image |
 
 The training images contain only one food type each, usually large and centered. The observed failure concerns wide table photos with several plates, where each food occupies a small part of the image. This does not mean that different foods on a single plate cannot be detected together, although performance on mixed plates has not been systematically evaluated. For the demo, close-up photos of a single plate are recommended.
+
+A possible next step is to composite single-food images into scenes with multiple plates, varying food size and position during fine-tuning. Any improvement should be measured on a separate set of real table photos.
 
 ## Serving with ONNX Runtime
 
@@ -170,7 +179,7 @@ pip install -r requirements-train.txt
 ### Train and export
 
 ```bash
-# 1. Convert AIHub labels to YOLO format.
+# 1. Convert AI-Hub labels to YOLO format.
 #    Expects data/raw/{training,validation}/ with one folder whose name contains "라벨" (labels) and one containing "원천" (images).
 #    Use --copy on Windows (symlinks need admin rights).
 python src/preprocessing/json_to_yolo.py --input data/raw/ --output data/processed/ --copy
@@ -187,13 +196,13 @@ uvicorn src.api.main:app --port 8000
 pytest
 ```
 
-AIHub zip files store Korean file names in CP949. Some unzip tools garble them, so extract with a tool that supports CP949, for example Python's `zipfile.ZipFile(path, metadata_encoding="cp949")`.
+AI-Hub zip files store Korean file names in CP949. Some unzip tools garble them, so extract with a tool that supports CP949, for example Python's `zipfile.ZipFile(path, metadata_encoding="cp949")`.
 
 ## Project structure
 
 ```
 ├── src/
-│   ├── preprocessing/json_to_yolo.py   # AIHub JSON -> YOLO labels
+│   ├── preprocessing/json_to_yolo.py   # AI-Hub JSON -> YOLO labels
 │   ├── training/train.py               # YOLOv8 fine-tuning (+ --resume)
 │   ├── inference/
 │   │   ├── predict.py                  # ONNX Runtime inference, pre/post-processing
@@ -225,11 +234,6 @@ This project uses the **"건강관리를 위한 음식 이미지" (Food Images f
 > 이 결과물은 과학기술정보통신부의 재원으로 한국지능정보사회진흥원의 지원을 받아 구축된 "건강관리를 위한 음식 이미지" 데이터를 활용하였습니다. (AI-Hub, www.aihub.or.kr)
 
 The sample photos in the demo are AI-generated and are not part of the AI-Hub dataset.
-
-## My contributions
-
-- Built the ML component end to end: data preprocessing, fine-tuning, evaluation and error analysis, ONNX serving, the FastAPI server, tests, and Docker.
-- Contributed to selected backend features of the main app using Spring Boot.
 
 ## Timeline
 

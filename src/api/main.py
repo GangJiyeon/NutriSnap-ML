@@ -52,7 +52,7 @@ def samples():
     ) if SAMPLES_DIR.is_dir() else []
     return {
         "samples": [
-            {"url": f"/static/samples/{p.name}", "label": p.stem.replace("_", " ").replace("-", " ").title()}
+            {"url": f"/static/samples/{p.name}", "label": p.stem.removeprefix("draft_").replace("_", " ").replace("-", " ").title()}
             for p in files
         ]
     }
