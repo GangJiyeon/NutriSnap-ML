@@ -1,0 +1,574 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NutriSnap Food Detector</title>
+<meta name="description" content="Upload a food photo and see which of 38 foods a fine-tuned YOLOv8 model detects.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css">
+<style>
+  :root {
+    --bg: #fbf6ee;
+    --bg-glow-1: #ffd9c2;
+    --bg-glow-2: #d8ead9;
+    --surface: #ffffff;
+    --surface-2: #f6efe4;
+    --border: #ece2d3;
+    --text: #2a211b;
+    --muted: #6b5e53;
+    --accent: #e0553b;
+    --accent-ink: #ffffff;
+    --accent-soft: #fde6dd;
+    --sage: #3f7d5c;
+    --sage-soft: #e1efe5;
+    --warn: #a86a08;
+    --error: #c2412d;
+    --shadow: 0 1px 2px rgba(60, 40, 20, .05), 0 12px 32px -12px rgba(60, 40, 20, .18);
+    --radius: 20px;
+    --serif: "Fraunces", Georgia, serif;
+    --sans: "Pretendard", system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #17130f;
+      --bg-glow-1: #3d2116;
+      --bg-glow-2: #16301f;
+      --surface: #211b16;
+      --surface-2: #2a231c;
+      --border: #3a3027;
+      --text: #f3ebe1;
+      --muted: #b3a493;
+      --accent: #ff7a5c;
+      --accent-ink: #2a120b;
+      --accent-soft: #3e2219;
+      --sage: #7cc39b;
+      --sage-soft: #1d3326;
+      --warn: #f0b55a;
+      --error: #ff8a75;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 16px 40px -16px rgba(0, 0, 0, .6);
+    }
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    color: var(--text);
+    font: 15px/1.6 var(--sans);
+    background:
+      radial-gradient(900px 500px at 8% -10%, var(--bg-glow-1), transparent 60%),
+      radial-gradient(800px 500px at 100% 0%, var(--bg-glow-2), transparent 55%),
+      var(--bg);
+    background-attachment: fixed;
+  }
+  main { max-width: 1120px; margin: 0 auto; padding: 20px 16px 64px; }
+  a { color: inherit; }
+  :focus-visible { outline: 2.5px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+  /* ---------- top bar ---------- */
+  .topbar { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 48px; flex-wrap: wrap; }
+  .brand { font-family: var(--serif); font-weight: 600; font-size: 20px; text-decoration: none; letter-spacing: -0.01em; }
+  .brand span { color: var(--accent); }
+  .links { display: flex; align-items: center; gap: 6px; }
+  .links a {
+    display: inline-flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 999px;
+    text-decoration: none; font-size: 13px; font-weight: 600; color: var(--muted); transition: color .15s, background .15s;
+  }
+  .links a:hover { color: var(--text); background: color-mix(in srgb, var(--surface) 70%, transparent); }
+  .links svg { width: 16px; height: 16px; }
+
+  /* ---------- hero ---------- */
+  .eyebrow {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--accent);
+  }
+  .eyebrow::before { content: ""; width: 18px; height: 2px; background: currentColor; border-radius: 2px; }
+  h1 {
+    font-family: var(--serif); font-weight: 600; font-size: clamp(36px, 6vw, 60px);
+    line-height: 1.04; letter-spacing: -0.02em; margin: 14px 0 16px;
+  }
+  h1 em { font-style: italic; color: var(--accent); }
+  .lede { max-width: 620px; margin: 0; font-size: 17px; color: var(--muted); }
+  .stats { display: flex; flex-wrap: wrap; gap: 14px 0; margin: 32px 0 0; padding: 0; list-style: none; }
+  .stats li { padding: 0 28px; border-left: 1px solid var(--border); font-size: 13px; color: var(--muted); }
+  .stats li:first-child { padding-left: 0; border-left: 0; }
+  .stats b { display: block; font-family: var(--serif); font-size: 28px; font-weight: 600; line-height: 1.15; color: var(--text); letter-spacing: -0.01em; }
+  @media (max-width: 560px) {
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+    .stats li { padding: 0; border: 0; }
+  }
+
+  /* ---------- workspace ---------- */
+  .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 20px; margin-top: 40px; align-items: start; }
+  @media (max-width: 860px) { .workspace { grid-template-columns: 1fr; } }
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+  .upload-card { padding: 10px; }
+
+  .drop {
+    position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 6px; min-height: 320px; padding: 32px 20px; text-align: center; cursor: pointer;
+    border-radius: 14px; border: 1.5px dashed transparent; background: var(--surface-2);
+    transition: border-color .2s, background .2s, transform .2s;
+  }
+  .drop:hover, .drop.dragging { border-color: var(--accent); background: var(--accent-soft); }
+  .drop:focus-within { border-color: var(--accent); }
+  .drop.dragging { transform: scale(.99); }
+  .drop-icon {
+    width: 76px; height: 76px; border-radius: 50%; display: grid; place-items: center; margin-bottom: 12px;
+    background: var(--surface); color: var(--accent); box-shadow: var(--shadow);
+  }
+  .drop h2 { font-family: var(--serif); font-weight: 500; font-size: 24px; margin: 0; letter-spacing: -0.01em; }
+  .drop p { margin: 0; color: var(--muted); font-size: 14px; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 16px; padding: 12px 20px;
+    border: 0; border-radius: 999px; background: var(--accent); color: var(--accent-ink);
+    font: 600 15px var(--sans); cursor: pointer; transition: transform .15s, box-shadow .15s;
+    box-shadow: 0 8px 20px -8px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
+  .btn:hover { transform: translateY(-1px); }
+  .btn.ghost { background: transparent; color: var(--text); border: 1px solid var(--border); box-shadow: none; margin: 0; padding: 9px 16px; font-size: 14px; }
+  .kbd { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  .kbd kbd { font: 600 11px var(--sans); padding: 2px 6px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface); }
+
+  .preview { display: none; }
+  .preview.show { display: block; }
+  .stage { position: relative; overflow: hidden; border-radius: 14px; background: var(--surface-2); }
+  canvas { display: block; width: 100%; height: auto; }
+  .scan { position: absolute; inset: 0; display: none; pointer-events: none; }
+  .scan.show { display: block; }
+  .scan::before { content: ""; position: absolute; inset: 0; background: rgba(20, 12, 6, .28); }
+  .scan::after {
+    content: ""; position: absolute; left: 0; right: 0; height: 30%;
+    background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--accent) 45%, transparent) 85%, var(--accent));
+    animation: sweep 1.3s cubic-bezier(.5, 0, .5, 1) infinite;
+  }
+  @keyframes sweep { from { top: -30%; } to { top: 100%; } }
+  @media (prefers-reduced-motion: reduce) { .scan::after { animation: none; top: 35%; } }
+  .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 4px 2px; flex-wrap: wrap; }
+  .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+
+  /* ---------- results ---------- */
+  .side { display: grid; gap: 16px; }
+  .results-card { padding: 22px; }
+  .results-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 16px; }
+  .results-head h3 { font-family: var(--serif); font-weight: 500; font-size: 22px; margin: 0; }
+  .count { font-size: 13px; color: var(--muted); }
+  .results { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+  .result {
+    position: relative; padding: 14px 16px 14px 18px; border-radius: 14px; background: var(--surface-2);
+    animation: rise .35s ease both;
+  }
+  .result::before { content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 4px; border-radius: 0 4px 4px 0; background: var(--c); }
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  .result-top { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+  .ko { font-weight: 700; font-size: 16px; }
+  .en { display: block; color: var(--muted); font-size: 13px; }
+  .pct { font-family: var(--serif); font-weight: 600; font-size: 26px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--c); }
+  .pct small { font-size: 14px; }
+  .bar { height: 6px; margin-top: 12px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .bar span { display: block; height: 100%; border-radius: 3px; background: var(--c); transform-origin: left; animation: grow .6s ease both; }
+  @keyframes grow { from { transform: scaleX(0); } }
+  .tag { display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; color: var(--warn); background: color-mix(in srgb, var(--warn) 14%, transparent); }
+  .placeholder { margin: 0; color: var(--muted); font-size: 14px; }
+  .placeholder.error { color: var(--error); }
+  .skeleton { height: 74px; border-radius: 14px; background: linear-gradient(90deg, var(--surface-2), var(--border), var(--surface-2)); background-size: 200% 100%; animation: shimmer 1.2s linear infinite; }
+  @keyframes shimmer { to { background-position: -200% 0; } }
+
+  .intro { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+  .samples-label { margin: 0 0 10px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .samples { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .sample {
+    position: relative; aspect-ratio: 1; padding: 0; border: 0; border-radius: 12px; overflow: hidden; cursor: pointer;
+    background: var(--surface-2); transition: transform .15s, box-shadow .15s;
+  }
+  .sample:hover { transform: translateY(-2px); box-shadow: var(--shadow); }
+  .sample img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .sample span {
+    position: absolute; left: 4px; right: 4px; bottom: 5px; padding: 2px 4px; border-radius: 999px;
+    background: rgba(20, 12, 6, .6); color: #fff; font-size: 10.5px; font-weight: 600; letter-spacing: -0.01em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .samples-note { margin: 10px 0 0; font-size: 12px; color: var(--muted); }
+  .example { opacity: .55; pointer-events: none; }
+  .example-label { margin: 0 0 8px; font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+
+  .tip { padding: 18px 20px; border-radius: var(--radius); background: var(--sage-soft); color: var(--text); font-size: 14px; }
+  .tip b { display: block; color: var(--sage); margin-bottom: 4px; }
+
+  /* ---------- sections ---------- */
+  section.block { margin-top: 72px; }
+  .block-head { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; margin-bottom: 22px; }
+  .block h2 { font-family: var(--serif); font-weight: 500; font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -0.01em; margin: 8px 0 0; }
+  .block-head p { margin: 0; color: var(--muted); max-width: 420px; font-size: 14px; }
+
+  .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+  @media (max-width: 760px) { .steps { grid-template-columns: 1fr; } }
+  .step { padding: 24px; }
+  .step-num { font-family: var(--serif); font-size: 15px; color: var(--accent); font-weight: 600; }
+  .step h4 { margin: 10px 0 6px; font-size: 17px; }
+  .step p { margin: 0; color: var(--muted); font-size: 14px; }
+
+  .menu { padding: 20px; }
+  .search {
+    display: flex; align-items: center; gap: 10px; padding: 11px 16px; margin-bottom: 16px;
+    border: 1px solid var(--border); border-radius: 999px; background: var(--surface-2); color: var(--muted);
+  }
+  .search:focus-within { border-color: var(--accent); }
+  .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text); font: 15px var(--sans); }
+  .foods { display: flex; flex-wrap: wrap; gap: 8px; }
+  .food { padding: 7px 13px; border-radius: 999px; background: var(--surface-2); font-size: 14px; font-weight: 600; }
+  .food span { margin-left: 6px; font-weight: 400; font-size: 12px; color: var(--muted); }
+  .menu-foot { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-top: 16px; font-size: 13px; color: var(--muted); }
+  .menu-foot[hidden], .btn[hidden] { display: none; }
+
+  footer { margin-top: 72px; padding-top: 28px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; align-items: flex-end; gap: 20px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
+  .author { display: grid; gap: 4px; }
+  .credit { max-width: 560px; margin-top: 6px; font-size: 12px; }
+  .credit a { font-weight: 600; text-decoration: underline; text-underline-offset: 2px; color: inherit; }
+  .author strong { font-family: var(--serif); font-size: 18px; font-weight: 600; color: var(--text); }
+  footer nav { display: flex; gap: 18px; flex-wrap: wrap; }
+  footer a { text-decoration: none; font-weight: 600; color: var(--text); }
+  footer a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+<main>
+  <div class="topbar">
+    <a class="brand" href="/">NutriSnap<span>.</span></a>
+    <nav class="links" aria-label="Project links">
+      <a href="https://github.com/GangJiyeon/NutriSnap-ML" target="_blank" rel="noopener">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2c-3.2.7-3.87-1.37-3.87-1.37-.53-1.33-1.28-1.69-1.28-1.69-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.71 1.26 3.37.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.69 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .97-.31 3.17 1.18a11 11 0 0 1 5.77 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.59.23 2.76.11 3.05.74.81 1.19 1.84 1.19 3.1 0 4.42-2.7 5.39-5.26 5.68.41.36.78 1.06.78 2.14v3.17c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .5z"/></svg>
+        Source
+      </a>
+      <a href="/docs" target="_blank" rel="noopener">API docs</a>
+    </nav>
+  </div>
+
+  <header>
+    <span class="eyebrow">Food detection · ML demo</span>
+    <h1>What's on <em>your plate?</em></h1>
+    <p class="lede">Upload a food photo and a YOLOv8 model fine-tuned on Korean food images will find what's in it, running on a lightweight ONNX Runtime server.</p>
+    <ul class="stats">
+      <li><b>38</b>foods recognized</li>
+      <li><b>93k</b>training images</li>
+      <li><b>0.97</b>mAP50 on validation</li>
+      <li><b>732 MB</b>server image, no PyTorch</li>
+    </ul>
+  </header>
+
+  <div class="workspace">
+    <div class="card upload-card">
+      <label class="drop" id="drop">
+        <span class="drop-icon" aria-hidden="true">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3 8.5A2.5 2.5 0 0 1 5.5 6h1.6l1.2-1.8A1.5 1.5 0 0 1 9.55 3.5h4.9a1.5 1.5 0 0 1 1.25.7L16.9 6h1.6A2.5 2.5 0 0 1 21 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17.5z"/>
+            <circle cx="12" cy="13" r="3.6"/>
+          </svg>
+        </span>
+        <h2>Drop a food photo</h2>
+        <p>JPG, PNG or WebP · up to 10 MB</p>
+        <button type="button" class="btn" id="pick">Choose a photo</button>
+        <span class="kbd">or paste with <kbd>Ctrl</kbd> + <kbd>V</kbd></span>
+        <input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden>
+      </label>
+
+      <div class="preview" id="preview">
+        <div class="stage">
+          <canvas id="canvas"></canvas>
+          <div class="scan" id="scan"></div>
+        </div>
+        <div class="toolbar">
+          <span class="meta" id="meta"></span>
+          <button type="button" class="btn ghost" id="again">Try another photo</button>
+        </div>
+      </div>
+    </div>
+
+    <aside class="side">
+      <div class="card results-card">
+        <div class="results-head">
+          <h3>Detections</h3>
+          <span class="count" id="count"></span>
+        </div>
+        <div id="results"></div>
+      </div>
+      <div class="tip">
+        <b>Works best with one dish, up close.</b>
+        Every training photo shows a single food, so busy tables with many dishes are a known weak spot.
+      </div>
+    </aside>
+  </div>
+
+  <section class="block">
+    <div class="block-head">
+      <div>
+        <span class="eyebrow">How it works</span>
+        <h2>From photo to food list</h2>
+      </div>
+    </div>
+    <div class="steps">
+      <div class="card step">
+        <span class="step-num">01</span>
+        <h4>Resize like training</h4>
+        <p>The photo is letterboxed to 640×640 with OpenCV, the same way the training images were prepared.</p>
+      </div>
+      <div class="card step">
+        <span class="step-num">02</span>
+        <h4>Detect with YOLOv8n</h4>
+        <p>A 3.1M-parameter model exported to ONNX scores 8,400 candidate boxes on the CPU.</p>
+      </div>
+      <div class="card step">
+        <span class="step-num">03</span>
+        <h4>Clean up and return</h4>
+        <p>Overlapping boxes are merged with NMS and scaled back to the original photo, then returned as JSON.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="block">
+    <div class="block-head">
+      <div>
+        <span class="eyebrow">Menu</span>
+        <h2>The <span id="class-count">38</span> foods it knows</h2>
+      </div>
+      <p>Trained on the first bundle of the AIHub food image dataset. Anything outside this list will be missed or mistaken for something similar.</p>
+    </div>
+    <div class="card menu">
+      <label class="search">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input id="food-search" type="search" placeholder="Search foods, e.g. pizza or 피자" autocomplete="off">
+      </label>
+      <div class="foods" id="foods"></div>
+      <div class="menu-foot" id="menu-foot">
+        <span id="menu-status"></span>
+        <button type="button" class="btn ghost" id="menu-toggle"></button>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="author">
+      <span>Designed and built by</span>
+      <strong>Jiyeon Kang</strong>
+      <span>Photos are processed in memory and never stored.</span>
+      <span class="credit">Trained on the "건강관리를 위한 음식 이미지" dataset from <a href="https://www.aihub.or.kr" target="_blank" rel="noopener">AI-Hub</a>, built with support from the National Information Society Agency (NIA, 한국지능정보사회진흥원) of Korea.</span>
+    </div>
+    <nav aria-label="Author links">
+      <a href="https://github.com/GangJiyeon" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://www.linkedin.com/in/jiyeon-kang-1bba6b392" target="_blank" rel="noopener">LinkedIn</a>
+      <a href="https://github.com/GangJiyeon/NutriSnap-ML" target="_blank" rel="noopener">Source code</a>
+    </nav>
+  </footer>
+</main>
+
+<script>
+const EN = {
+  "가리비": "Scallop", "갈비탕": "Short rib soup", "골드키위": "Gold kiwi", "과일채소샐러드": "Fruit & veggie salad",
+  "그린올리브": "Green olives", "김구이": "Roasted seaweed", "달걀말이": "Rolled omelette", "닭갈비": "Spicy stir-fried chicken",
+  "닭살채소두반장볶음": "Chicken & veggies in doubanjiang", "닭파프리카볶음": "Chicken & bell pepper stir-fry",
+  "도리야끼": "Dorayaki", "돼지감자": "Jerusalem artichoke", "돼지고기볶음": "Stir-fried pork", "마르게리따피자": "Margherita pizza",
+  "마시멜로우": "Marshmallow", "마카롱": "Macaron", "메쉬드포테이토": "Mashed potatoes", "멜론": "Melon",
+  "모듬초밥": "Assorted sushi", "모짜렐라치즈": "Mozzarella", "무우": "Radish", "미소장국": "Miso soup",
+  "미역나물": "Seasoned seaweed", "바게트빵": "Baguette", "바나나우유": "Banana milk", "보드카": "Vodka",
+  "보이차": "Pu'er tea", "붉은 양배추 절임": "Pickled red cabbage", "브라질너트": "Brazil nuts", "상추샐러드": "Lettuce salad",
+  "생맥주": "Draft beer", "송편": "Songpyeon rice cake", "순대국밥": "Blood sausage soup", "순살찜닭": "Braised chicken",
+  "슈크림": "Cream puff", "스크램블드에그": "Scrambled eggs", "스테이크": "Steak", "스튜": "Stew"
+};
+// AIHub 원본 라벨의 오타를 화면 표시에서만 바로잡는다 (API 응답의 food_name은 백엔드 조회용이라 그대로 둔다)
+const KO = { "도리야끼": "도라야끼" };
+const ko = name => KO[name] || name;
+const COLORS = ["#e0553b", "#3f7d5c", "#3c6fd1", "#b5478f", "#c48a12", "#1f93a8"];
+const MAX_SIDE = 1920; // 업로드 전 축소: 전송 시간을 줄이고, 휴대폰 사진의 EXIF 회전도 픽셀에 반영된다
+
+const $ = id => document.getElementById(id);
+const drop = $("drop"), fileInput = $("file"), canvas = $("canvas"), ctx = canvas.getContext("2d");
+let loaded = null;
+
+$("pick").addEventListener("click", e => { e.preventDefault(); fileInput.click(); });
+fileInput.addEventListener("change", () => fileInput.files[0] && handle(fileInput.files[0]));
+drop.addEventListener("dragover", e => { e.preventDefault(); drop.classList.add("dragging"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("dragging"));
+drop.addEventListener("drop", e => {
+  e.preventDefault(); drop.classList.remove("dragging");
+  const f = e.dataTransfer.files[0]; if (f) handle(f);
+});
+document.addEventListener("paste", e => {
+  const item = [...e.clipboardData.items].find(i => i.type.startsWith("image/"));
+  if (item) handle(item.getAsFile());
+});
+$("again").addEventListener("click", () => {
+  $("preview").classList.remove("show"); drop.style.display = "";
+  renderIntro();
+  fileInput.value = "";
+});
+
+// 업로드 전 결과 카드: 샘플 사진이 있으면 바로 눌러볼 수 있게, 없으면 결과 예시를 흐리게 보여준다
+let samples = [];
+
+function renderIntro() {
+  if (samples.length) {
+    const items = samples.map((s, i) =>
+      `<button type="button" class="sample" data-i="${i}" aria-label="Try sample: ${escape(s.label)}">
+        <img src="${escape(s.url)}" alt="" loading="lazy"><span>${escape(s.label)}</span>
+      </button>`).join("");
+    setResults(`<p class="intro">No food photo handy? Try one of these.</p>
+      <p class="samples-label">Samples</p><div class="samples">${items}</div>
+      <p class="samples-note">Sample photos are AI-generated.</p>`, "");
+    $("results").querySelectorAll(".sample").forEach(btn =>
+      btn.addEventListener("click", () => trySample(samples[btn.dataset.i])));
+  } else {
+    setResults(`<p class="intro">Upload a photo to see what the model finds.</p>
+      <p class="example-label">Example</p>
+      <ul class="results example" aria-hidden="true">${resultItem({ food_name: "마카롱", confidence: 0.94 }, 0)}${resultItem({ food_name: "마카롱", confidence: 0.91 }, 1)}</ul>`, "");
+  }
+}
+
+async function trySample(sample) {
+  try {
+    const blob = await (await fetch(sample.url)).blob();
+    handle(new File([blob], "sample.jpg", { type: blob.type || "image/jpeg" }));
+  } catch {
+    showError("Could not load the sample photo.");
+  }
+}
+
+async function handle(file) {
+  if (!file.type.startsWith("image/")) return showError("Please choose an image file.");
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
+  } catch {
+    return showError("Your browser can't read this image. Try a JPG or PNG.");
+  }
+  const scale = Math.min(1, MAX_SIDE / Math.max(bitmap.width, bitmap.height));
+  const w = Math.round(bitmap.width * scale), h = Math.round(bitmap.height * scale);
+  const off = new OffscreenCanvas(w, h);
+  off.getContext("2d").drawImage(bitmap, 0, 0, w, h);
+  const blob = await off.convertToBlob({ type: "image/jpeg", quality: 0.92 });
+  loaded = await createImageBitmap(blob);
+
+  drop.style.display = "none";
+  $("preview").classList.add("show");
+  draw([]);
+  $("scan").classList.add("show");
+  $("meta").textContent = "Detecting…";
+  setResults('<div class="skeleton"></div>', "");
+
+  const form = new FormData();
+  form.append("image", blob, "upload.jpg");
+  const started = performance.now();
+  try {
+    const res = await fetch("/predict", { method: "POST", body: form });
+    const body = await res.json();
+    if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
+    const ms = Math.round(performance.now() - started);
+    $("meta").textContent = `${w} × ${h}px photo`;
+    draw(body.detections);
+    renderResults(body.detections, ms);
+    // 모바일에서는 결과 카드가 사진 아래에 있으므로 결과가 나오면 그쪽으로 스크롤
+    if (matchMedia("(max-width: 860px)").matches) $("results").closest(".card").scrollIntoView({ behavior: "smooth", block: "start" });
+  } catch (err) {
+    $("meta").textContent = "";
+    showError(err.message);
+  } finally {
+    $("scan").classList.remove("show");
+  }
+}
+
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h);
+}
+
+function draw(detections) {
+  canvas.width = loaded.width; canvas.height = loaded.height;
+  ctx.drawImage(loaded, 0, 0);
+  // 캔버스는 CSS로 축소되어 보이므로, 화면에 보이는 크기 기준으로 선/글자 크기를 맞춘다
+  const k = loaded.width / (canvas.clientWidth || loaded.width);
+  const line = 2.5 * k, font = 13 * k, radius = 6 * k;
+  detections.forEach((d, i) => {
+    const [x1, y1, x2, y2] = d.bbox, color = COLORS[i % COLORS.length];
+    ctx.fillStyle = color + "22";
+    roundRect(x1, y1, x2 - x1, y2 - y1, radius); ctx.fill();
+    ctx.lineWidth = line; ctx.strokeStyle = color;
+    ctx.setLineDash(d.needs_review ? [line * 4, line * 3] : []);
+    roundRect(x1, y1, x2 - x1, y2 - y1, radius); ctx.stroke();
+    ctx.setLineDash([]);
+
+    const label = `${EN[d.food_name] || d.food_name}  ${Math.round(d.confidence * 100)}%`;
+    ctx.font = `600 ${font}px Pretendard, system-ui, sans-serif`;
+    const pw = ctx.measureText(label).width + font * 1.1, ph = font * 1.75;
+    const px = Math.min(Math.max(x1, 0), loaded.width - pw);
+    const py = y1 - ph - line >= 0 ? y1 - ph - line : y1 + line;
+    ctx.fillStyle = color;
+    roundRect(px, py, pw, ph, ph / 2); ctx.fill();
+    ctx.fillStyle = "#fff"; ctx.textBaseline = "middle";
+    ctx.fillText(label, px + font * 0.55, py + ph / 2 + font * 0.04);
+  });
+}
+
+function resultItem(d, i) {
+  const color = COLORS[i % COLORS.length], pct = Math.round(d.confidence * 100);
+  return `<li class="result" style="--c:${color};animation-delay:${i * 60}ms">
+    <div class="result-top">
+      <div><span class="ko">${escape(ko(d.food_name))}</span><span class="en">${escape(EN[d.food_name] || "")}</span>
+        ${d.needs_review ? '<span class="tag">Low confidence</span>' : ""}</div>
+      <span class="pct">${pct}<small>%</small></span>
+    </div>
+    <div class="bar"><span style="width:${pct}%"></span></div>
+  </li>`;
+}
+
+function renderResults(detections, ms) {
+  const timing = `${ms} ms`;
+  if (!detections.length) {
+    return setResults('<p class="placeholder">No food found. The model only knows the foods listed below, and works best when one dish fills most of the photo.</p>', timing);
+  }
+  setResults(`<ul class="results">${detections.map(resultItem).join("")}</ul>`, `${detections.length} found · ${timing}`);
+}
+
+function setResults(html, count) { $("results").innerHTML = html; $("count").textContent = count; }
+function showError(msg) { setResults(`<p class="placeholder error">${escape(msg)}</p>`, ""); }
+function escape(s) {
+  return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// 음식 목록: 클래스가 수백 개로 늘어나도 페이지가 길어지지 않도록 기본은 일부만 보여주고 검색/펼치기로 탐색
+const PREVIEW_COUNT = 12;
+let allFoods = [], showAll = false;
+
+function renderFoods() {
+  const q = $("food-search").value.trim().toLowerCase();
+  const matches = allFoods.filter(c => !q || ko(c).toLowerCase().includes(q) || (EN[c] || "").toLowerCase().includes(q));
+  const visible = q || showAll ? matches : matches.slice(0, PREVIEW_COUNT);
+  $("foods").innerHTML = visible.length
+    ? visible.map(c => `<span class="food">${escape(ko(c))}<span>${escape(EN[c] || "")}</span></span>`).join("")
+    : '<p class="placeholder">Not in the menu yet. The model only knows the foods listed here.</p>';
+
+  const collapsible = !q && matches.length > PREVIEW_COUNT;
+  $("menu-foot").hidden = !q && !collapsible;
+  $("menu-status").textContent = q ? `${matches.length} of ${allFoods.length} foods` : `Showing ${visible.length} of ${allFoods.length}`;
+  $("menu-toggle").hidden = !collapsible;
+  $("menu-toggle").textContent = showAll ? "Show less" : `Show all ${allFoods.length}`;
+}
+
+$("food-search").addEventListener("input", renderFoods);
+$("menu-toggle").addEventListener("click", () => { showAll = !showAll; renderFoods(); });
+
+renderIntro();
+fetch("/samples").then(r => r.json()).then(body => {
+  samples = body.samples || [];
+  if (samples.length && !$("preview").classList.contains("show")) renderIntro();
+}).catch(() => {});
+
+fetch("/classes").then(r => r.json()).then(({ classes }) => {
+  allFoods = classes;
+  $("class-count").textContent = classes.length;
+  renderFoods();
+}).catch(() => {});
+</script>
+</body>
+</html>

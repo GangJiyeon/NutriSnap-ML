@@ -7,7 +7,7 @@ from io import BytesIO
 import cv2
 import numpy as np
 import onnxruntime as ort
-from PIL import Image
+from PIL import Image, ImageOps
 
 from src.config import get_config
 
@@ -119,7 +119,8 @@ def predict_image(image_bytes: bytes) -> list[dict]:
     threshold = config["confidence_threshold"]
     max_detections = config["max_detections"]
 
-    image = Image.open(BytesIO(image_bytes)).convert("RGB")
+    # 휴대폰 사진은 회전 정보를 EXIF에만 담고 있어 그대로 쓰면 옆으로 누운 이미지로 추론된다
+    image = ImageOps.exif_transpose(Image.open(BytesIO(image_bytes))).convert("RGB")
     model = get_model()
 
     detections = []

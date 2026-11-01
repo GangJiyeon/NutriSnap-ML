@@ -74,3 +74,31 @@ def test_predict_flags_low_confidence_as_needs_review(monkeypatch, client):
 def test_predict_rejects_non_image_file(client):
     response = client.post("/predict", files={"image": ("not_an_image.txt", b"hello world", "text/plain")})
     assert response.status_code == 400
+
+
+def test_predict_rejects_too_large_upload(client):
+    too_large = b"0" * (10 * 1024 * 1024 + 1)
+    response = client.post("/predict", files={"image": ("big.jpg", too_large, "image/jpeg")})
+    assert response.status_code == 413
+
+
+def test_classes_lists_model_names_in_id_order(monkeypatch, client):
+    monkeypatch.setattr("src.api.main.get_model", lambda: _FakeModel([], {1: "김치", 0: "밥"}))
+    response = client.get("/classes")
+    assert response.json() == {"classes": ["밥", "김치"]}
+
+
+def test_demo_page_is_served(client):
+    response = client.get("/")
+    assert response.status_code == 200
+    assert "text/html" in response.headers["content-type"]
+
+
+def test_samples_lists_images_with_labels(monkeypatch, tmp_path, client):
+    (tmp_path / "green_olives.jpg").write_bytes(b"")
+    (tmp_path / "notes.txt").write_text("not an image")
+    monkeypatch.setattr("src.api.main.SAMPLES_DIR", tmp_path)
+
+    response = client.get("/samples")
+
+    assert response.json() == {"samples": [{"url": "/static/samples/green_olives.jpg", "label": "Green Olives"}]}

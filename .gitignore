@@ -6,3 +6,6 @@ __pycache__/
 *.pyc
 *.pt
 *.zip
+
+testimg
+imgs
