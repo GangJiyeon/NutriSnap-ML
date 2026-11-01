@@ -112,18 +112,6 @@
   .preview.show { display: block; }
   .stage { position: relative; overflow: hidden; border-radius: 14px; background: var(--surface-2); }
   canvas { display: block; width: 100%; height: auto; }
-  .scan { position: absolute; inset: 0; display: none; pointer-events: none; }
-  .scan.show { display: block; }
-  .scan::before { content: ""; position: absolute; inset: 0; background: rgba(29, 29, 31, .18); }
-  .scan::after {
-    content: ""; position: absolute; left: 0; right: 0; height: 30%;
-    border-bottom: 2px solid var(--accent);
-    filter: drop-shadow(0 2px 6px rgba(224, 85, 59, .6));
-    background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--accent) 45%, transparent) 85%, var(--accent));
-    animation: sweep 1s linear infinite;
-  }
-  @keyframes sweep { from { top: -30%; } to { top: 100%; } }
-  @media (prefers-reduced-motion: reduce) { .scan::after { animation: none; top: 35%; } }
   .toolbar { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 14px 4px 2px; flex-wrap: wrap; }
   .meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
 
@@ -321,8 +309,8 @@
 
   <header>
     <span class="eyebrow">Food detection · ML demo</span>
-    <h1>Your plate.<em>A little more understood.</em></h1>
-    <p class="lede">A photo is all it takes. Discover what’s on your plate with a model trained to recognize 38 foods.</p>
+    <h1>Food recognition.<em>From a single photo.</em></h1>
+    <p class="lede">Upload a photo to detect foods and view confidence scores. Supports 38 food classes.</p>
     <ul class="stats">
       <li><b>38</b>foods recognized</li>
       <li><b>93k</b>training images</li>
@@ -350,7 +338,6 @@
       <div class="preview" id="preview">
         <div class="stage">
           <canvas id="canvas"></canvas>
-          <div class="scan" id="scan"></div>
         </div>
         <div class="toolbar">
           <span class="meta" id="meta"></span>
@@ -378,7 +365,7 @@
     <div class="block-head">
       <div>
         <span class="eyebrow">How it works</span>
-        <h2>From photo to food list</h2>
+        <h2>The detection pipeline</h2>
       </div>
     </div>
     <div class="steps">
@@ -404,7 +391,7 @@
     <div class="block-head">
       <div>
         <span class="eyebrow">Menu</span>
-        <h2>The <span id="class-count">38</span> foods it knows</h2>
+        <h2><span id="class-count">38</span> supported foods</h2>
       </div>
       <p>Trained on the first bundle of the AI-Hub food image dataset. Anything outside this list will be missed or mistaken for something similar.</p>
     </div>
@@ -486,7 +473,7 @@ function renderIntro() {
       `<button type="button" class="sample" data-i="${i}" aria-label="Try sample: ${escape(s.label)}">
         <img src="${escape(s.url)}" alt="" loading="lazy"><span>${escape(s.label)}</span>
       </button>`).join("");
-    setResults(`<p class="intro">No food photo handy? Try one of these.</p>
+    setResults(`<p class="intro">Select a sample photo to try the model.</p>
       <p class="samples-label">Samples</p><div class="samples">${items}</div>
       <p class="samples-note">Sample photos are AI-generated.</p>`, "");
     $("results").querySelectorAll(".sample").forEach(btn =>
@@ -525,7 +512,6 @@ async function handle(file) {
   drop.style.display = "none";
   $("preview").classList.add("show");
   draw([]);
-  $("scan").classList.add("show");
   $("meta").textContent = "Detecting…";
   setResults('<div class="skeleton"></div>', "");
 
@@ -537,10 +523,6 @@ async function handle(file) {
     const body = await res.json();
     if (!res.ok) throw new Error(body.detail || `Request failed (${res.status})`);
     const ms = Math.round(performance.now() - started);
-    // 빠른 로컬 추론에서도 분석 중임을 알아볼 수 있도록 스캔 한 번을 보여준다.
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      await new Promise(resolve => setTimeout(resolve, Math.max(0, 1000 - ms)));
-    }
     $("meta").textContent = `${w} × ${h}px photo`;
     draw(body.detections);
     renderResults(body.detections, ms);
@@ -549,8 +531,6 @@ async function handle(file) {
   } catch (err) {
     $("meta").textContent = "";
     showError(err.message);
-  } finally {
-    $("scan").classList.remove("show");
   }
 }
 
