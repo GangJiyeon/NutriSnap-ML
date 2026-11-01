@@ -1,0 +1,28 @@
+services:
+  api:
+    image: ${NUTRISNAP_IMAGE:?Set NUTRISNAP_IMAGE to the deployment image}
+    container_name: nutrisnap-ml
+    restart: unless-stopped
+    cpus: 0.75
+    mem_limit: 512m
+    environment:
+      OMP_NUM_THREADS: "1"
+      OPENBLAS_NUM_THREADS: "1"
+    networks:
+      edge:
+        aliases:
+          - nutrisnap-ml
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/classes', timeout=10)"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+networks:
+  edge:
+    external: true

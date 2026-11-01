@@ -170,6 +170,12 @@ https://nutrisnap.stewdiore.com → Cloudflare Tunnel → FastAPI container :800
 
 The container restarts automatically unless explicitly stopped, and has a 512 MiB memory limit, a 0.75 CPU limit, and a `/health` check. After a sample inference, container memory usage was approximately **128 MiB**. The health endpoint, demo page, model class list, and inference on all three sample photos were verified after deployment.
 
+### Automatic deployment
+
+GitHub Actions runs the test suite on pull requests and pushes to `main`. After tests pass on `main`, it uploads the application source over SSH, builds a Docker image on the server, and restarts the API. The trained model stays on the server at `/opt/nutrisnap-ml/models/food_yolov8.onnx` and is not stored in GitHub. Model loading and a steak sample prediction are checked after deployment; a failed container or inference check triggers a rollback to the previous image.
+
+The workflow uses repository Actions secrets `DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`, and `DEPLOY_KNOWN_HOSTS`. Deployment files are in `deploy/`; progress and errors appear in the repository's **Actions** tab. The workflow can also be run manually on `main` using **Run workflow**.
+
 ### Local setup
 
 ```bash
